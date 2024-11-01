@@ -20,7 +20,7 @@ Terraform Module to set up Cloud Build notifications.
 
 ```hcl
 module "cloudbuild_notifications" {
-  source = SOURCE TODO
+  source = "chrisrickenbacher/cloud-build-notifications/google"
   gcp_project_id = ""
   gcp_region = ""
   enable_apis = true
