@@ -14,3 +14,21 @@ Terraform Module to set up Cloud Build notifications.
 
 ## Features
 
+- Send Cloud Build notification (Success, Failure, Timeout) to Google Chat
+
+## How to use
+
+```hcl
+module "cloudbuild_notifications" {
+  source = SOURCE TODO
+  gcp_project_id = ""
+  gcp_region = ""
+  enable_apis = true
+  notifiers = {
+    google_chat = {
+      webhook_url = ""
+    }
+  }
+}
+```
+
