@@ -29,5 +29,7 @@ variable "notifiers" {
     # })
   })
   description = "Definition of the notifiers the Notifications are sent to."
-  default = {}
+  default = {
+    google_chat = null
+  }
 }

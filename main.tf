@@ -2,7 +2,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 4.74.0"
+      version = "~> 5.36.0"
     }
   }
 }
@@ -20,7 +20,7 @@ data "google_project" "project" {}
 
 module "project_services" {
   source          = "terraform-google-modules/project-factory/google//modules/project_services"
-  version         = "~> 13.0"
+  version         = "~> 17.0"
 
   project_id      = var.gcp_project_id
   enable_apis     = var.enable_apis
@@ -38,7 +38,7 @@ module "project_services" {
 
 resource "google_service_account" "service_account" {
   project       = var.gcp_project_id
-  account_id    = local.alias.short
+  account_id    = local.alias_short
   display_name  = var.name
 }
 
@@ -47,7 +47,8 @@ resource "google_project_iam_member" "iam_project" {
   for_each      = toset([
     "roles/iam.serviceAccountUser",
     "roles/iam.serviceAccountTokenCreator",
-    "roles/run.invoker"
+    "roles/run.invoker",
+    "roles/run.admin"
   ])
   role          = each.key
   member        = "serviceAccount:${google_service_account.service_account.email}"
@@ -56,7 +57,8 @@ resource "google_project_iam_member" "iam_project" {
 resource "google_storage_bucket" "storage" {
   project       = var.gcp_project_id
   location      = var.gcp_region
-  name          = "${var.gcp_project_id}-${local.alias.short}"
+  name          = "${var.gcp_project_id}-${local.alias_short}"
+  uniform_bucket_level_access = true
 }
 
 resource "google_project_iam_member" "iam_storage" {
@@ -89,13 +91,13 @@ resource "google_pubsub_topic" "topic" {
 # Google Chat
 
 resource "google_secret_manager_secret_version" "googlechat_secret" {
-  count         = contains(keys(var.notifiers), "google_chat") ? 1 : 0
-  secret = "projects/${data.google_project.project.number}/secrets/${local.alias}-googlechat"
+  count         = var.notifiers.google_chat == null ? 0 : 1
+  secret        = "projects/${data.google_project.project.number}/secrets/${local.alias}-googlechat"
   secret_data = var.notifiers.google_chat.webhook_url
 }
 
 resource "google_storage_bucket_object" "googlechat_config" {
-  count         = contains(keys(var.notifiers), "google_chat") ? 1 : 0
+  count         = var.notifiers.google_chat == null ? 0 : 1
   name          = "google-chat-notifier.yml"
   bucket        = google_storage_bucket.storage.name
   content       = <<EOF
@@ -105,7 +107,7 @@ metadata:
   name: ${local.alias}-googlechat
 spec:
   notification:
-    # filter: build.status == Build.Status.SUCCESS
+    filter: build.status in [Build.Status.FAILURE, Build.Status.TIMEOUT, Build.Status.SUCCESS]
     delivery:
       webhookUrl:
         secretRef: webhook-url
@@ -116,17 +118,19 @@ EOF
 }
 
 resource "google_cloud_run_v2_service" "googlechat_service" {
-  count         = contains(keys(var.notifiers), "google_chat") ? 1 : 0
+  count         = var.notifiers.google_chat == null ? 0 : 1
   name          = "${local.alias}-googlechat"
   location      = var.gcp_region
   project       = var.gcp_project_id
+  
   ingress       = "INGRESS_TRAFFIC_ALL"
   template {
+    service_account = google_service_account.service_account.email
     containers {
       image     = "us-east1-docker.pkg.dev/gcb-release/cloud-build-notifiers/googlechat:latest"
       env {
         name    = "CONFIG_PATH"
-        value   = google_storage_bucket_object.googlechat_config.self_link
+        value   = "${google_storage_bucket.storage.url}/${google_storage_bucket_object.googlechat_config[0].output_name}"
       }
       env {
         name    = "PROJECT_ID"
@@ -138,7 +142,7 @@ resource "google_cloud_run_v2_service" "googlechat_service" {
 }
 
 resource "google_pubsub_subscription" "googlechat_subscription" {
-  count         = contains(keys(var.notifiers), "google_chat") ? 1 : 0
+  count         = var.notifiers.google_chat == null ? 0 : 1
   project       = var.gcp_project_id 
   name          = "${local.alias}-googlechat"
   topic         = google_pubsub_topic.topic.id
@@ -146,7 +150,7 @@ resource "google_pubsub_subscription" "googlechat_subscription" {
     oidc_token {
       service_account_email = google_service_account.service_account.email
     }
-    push_endpoint = google_cloud_run_v2_service.googlechat_service.uri
+    push_endpoint = "${google_cloud_run_v2_service.googlechat_service[0].uri}"
   }
 }
 
