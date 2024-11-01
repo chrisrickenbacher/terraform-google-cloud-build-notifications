@@ -8,7 +8,7 @@ terraform {
 }
 
 locals {
- alias            = replace(lower(var.name), " ", "-")
+ alias            = replace(replace(lower(var.name), " ", "-"), "_", "-")
  alias_short      = substr(local.alias, 0, 30)
 }
 
@@ -85,7 +85,13 @@ resource "google_secret_manager_secret_iam_member" "iam_secrets" {
 
 resource "google_pubsub_topic" "topic" {
   project      = var.gcp_project_id
-  name         = local.alias
+  name         = "cloud-builds"
+}
+
+resource "google_project_iam_member" "pubsub" {
+  project = var.gcp_project_id
+  role    = "roles/iam.serviceAccountTokenCreator"
+  member  = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
 }
 
 # Google Chat
