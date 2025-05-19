@@ -152,6 +152,9 @@ resource "google_pubsub_subscription" "googlechat_subscription" {
   project       = var.gcp_project_id 
   name          = "${local.alias}-googlechat"
   topic         = google_pubsub_topic.topic.id
+  expiration_policy {
+    ttl = ""
+  }
   push_config {
     oidc_token {
       service_account_email = google_service_account.service_account.email
