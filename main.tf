@@ -144,6 +144,7 @@ resource "google_cloud_run_v2_service" "googlechat_service" {
       }
     }
   }
+  depends_on = [ module.project_services, google_secret_manager_secret_version.googlechat_secret ]
   
 }
 
